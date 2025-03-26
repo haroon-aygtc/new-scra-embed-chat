@@ -1140,6 +1140,12 @@ const ScrapingConfigPanel: React.FC<ScrapingConfigPanelProps> = ({
             </>
           )}
         </Button>
+        {isLoading && (
+          <p className="text-center text-sm text-muted-foreground mt-2">
+            Please wait while we scrape the website. Results will appear
+            automatically when complete.
+          </p>
+        )}
       </div>
     </div>
   );

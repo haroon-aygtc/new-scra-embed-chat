@@ -1,5 +1,9 @@
 import { CategoryData, CategoryItem } from "@/types/scraping";
 import { generateUniqueId } from "@/lib/utils/ids";
+import {
+  extractItemsFromContent,
+  getCategoryKeywords,
+} from "./extractItemsFromContent";
 
 /**
  * Categorizes content based on extracted data and specified categories
@@ -158,6 +162,54 @@ function addCrossCategoryRelationships(
         }
       });
     }
+
+    // Look for relationships between products and fees
+    if (categorizedData.products && categorizedData.fees) {
+      const products = categorizedData.products.items;
+      const fees = categorizedData.fees.items;
+
+      // For each product, try to find related fees
+      products.forEach((product) => {
+        const productTitle = product.title.toLowerCase();
+        const relatedFees = fees.filter((fee) => {
+          const feeContent = fee.content.toLowerCase();
+          return (
+            feeContent.includes(productTitle) ||
+            productTitle.includes(fee.title.toLowerCase())
+          );
+        });
+
+        if (relatedFees.length > 0) {
+          // Add relationship metadata
+          if (!product.metadata) product.metadata = {};
+          product.metadata.relatedFees = relatedFees.map((fee) => fee.id);
+        }
+      });
+    }
+
+    // Look for relationships between locations and hours
+    if (categorizedData.locations && categorizedData.hours) {
+      const locations = categorizedData.locations.items;
+      const hours = categorizedData.hours.items;
+
+      // For each location, try to find related hours
+      locations.forEach((location) => {
+        const locationTitle = location.title.toLowerCase();
+        const relatedHours = hours.filter((hour) => {
+          const hourContent = hour.content.toLowerCase();
+          return (
+            hourContent.includes(locationTitle) ||
+            locationTitle.includes(hour.title.toLowerCase())
+          );
+        });
+
+        if (relatedHours.length > 0) {
+          // Add relationship metadata
+          if (!location.metadata) location.metadata = {};
+          location.metadata.relatedHours = relatedHours.map((hour) => hour.id);
+        }
+      });
+    }
   } catch (error) {
     console.error("Error adding cross-category relationships:", error);
     // Don't throw, just log the error as this is an enhancement
@@ -173,6 +225,13 @@ function getCategoryDescription(category: string): string {
     fees: "Pricing and fee structure",
     documents: "Required documents and forms",
     eligibility: "Eligibility criteria for services",
+    products: "Products available for purchase",
+    contact: "Contact information and support details",
+    faq: "Frequently asked questions and answers",
+    hours: "Business hours and availability",
+    locations: "Physical locations and addresses",
+    team: "Team members and staff information",
+    testimonials: "Customer reviews and testimonials",
   };
 
   const key = category.toLowerCase();
@@ -186,13 +245,10 @@ async function extractCategoryItems(
   extractedData: any,
   category: string,
 ): Promise<CategoryItem[]> {
-  // In a production environment, this would use NLP and ML techniques
-  // For this implementation, we'll create items based on the extracted data
-
-  const items: CategoryItem[] = [];
-  const categoryKey = category.toLowerCase();
-
   // Check if we have structured data for this category
+  const categoryKey = category.toLowerCase();
+  const items: CategoryItem[] = [];
+
   if (extractedData.structured && extractedData.structured[categoryKey]) {
     const categoryData = extractedData.structured[categoryKey];
 
@@ -215,27 +271,12 @@ async function extractCategoryItems(
       }
     }
   } else {
-    // If no structured data, try to extract from content
-    // For demo purposes, add sample items for eligibility category
-    if (categoryKey === "eligibility") {
-      items.push(
-        createSampleItem(
-          "Business Clients",
-          "Available for registered businesses with valid business identification.",
-        ),
-        createSampleItem(
-          "Individual Clients",
-          "Available for individuals with valid ID and proof of address.",
-        ),
-      );
-    } else {
-      // For other categories, use content extraction
-      const extractedItems = await extractItemsFromContent(
-        extractedData,
-        category,
-      );
-      items.push(...extractedItems);
-    }
+    // If no structured data, extract from content
+    const extractedItems = await extractItemsFromContent(
+      extractedData,
+      category,
+    );
+    items.push(...extractedItems);
   }
 
   // Apply post-processing to improve quality
@@ -335,59 +376,65 @@ function postProcessCategoryItems(
         break;
 
       case "eligibility":
-        // No specific enhancements for eligibility yet
+        // Extract requirement type if possible
+        const requirementMatch = item.content.match(
+          /age|income|residency|citizenship|qualification|license|certification/i,
+        );
+        if (
+          requirementMatch &&
+          (!item.metadata || !item.metadata.requirementType)
+        ) {
+          enhancedItem.metadata = {
+            ...enhancedItem.metadata,
+            requirementType: requirementMatch[0].toLowerCase(),
+          };
+        }
+        break;
+
+      case "products":
+        // Extract price and availability if mentioned
+        const productPriceMatch = item.content.match(
+          /\$\d+(\.\d+)?|\d+ dollars/i,
+        );
+        const availabilityMatch = item.content.match(
+          /in stock|available|out of stock|backordered|pre-order/i,
+        );
+
+        enhancedItem.metadata = {
+          ...enhancedItem.metadata,
+        };
+
+        if (productPriceMatch && !enhancedItem.metadata.price) {
+          enhancedItem.metadata.price = productPriceMatch[0];
+        }
+
+        if (availabilityMatch && !enhancedItem.metadata.availability) {
+          enhancedItem.metadata.availability =
+            availabilityMatch[0].toLowerCase();
+        }
+        break;
+
+      case "contact":
+        // Extract contact details
+        const emailMatch = item.content.match(
+          /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/i,
+        );
+        const phoneMatch = item.content.match(/\+?[\d\s()-]{10,}/i);
+
+        enhancedItem.metadata = {
+          ...enhancedItem.metadata,
+        };
+
+        if (emailMatch && !enhancedItem.metadata.email) {
+          enhancedItem.metadata.email = emailMatch[0];
+        }
+
+        if (phoneMatch && !enhancedItem.metadata.phone) {
+          enhancedItem.metadata.phone = phoneMatch[0];
+        }
         break;
     }
 
     return enhancedItem;
   });
-}
-
-/**
- * Creates a sample category item
- */
-function createSampleItem(title: string, content: string): CategoryItem {
-  return {
-    id: generateUniqueId(),
-    title,
-    content,
-    confidence: 0.5,
-    verified: false,
-  };
-}
-
-/**
- * Returns keywords for a category
- */
-function getCategoryKeywords(category: string): string[] {
-  const keywords: Record<string, string[]> = {
-    services: ["service", "offering", "solution", "product", "package"],
-    fees: ["fee", "price", "cost", "pricing", "payment", "rate", "charge"],
-    documents: [
-      "document",
-      "form",
-      "file",
-      "paperwork",
-      "agreement",
-      "contract",
-    ],
-    eligibility: [
-      "eligibility",
-      "requirement",
-      "qualify",
-      "criteria",
-      "eligible",
-    ],
-  };
-
-  const key = category.toLowerCase();
-  return keywords[key] || [key];
-}
-
-/**
- * Checks if text contains any of the keywords
- */
-function containsKeywords(text: string, keywords: string[]): boolean {
-  const lowerText = text.toLowerCase();
-  return keywords.some((keyword) => lowerText.includes(keyword.toLowerCase()));
 }

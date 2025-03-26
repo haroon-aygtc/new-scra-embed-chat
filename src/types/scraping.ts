@@ -12,6 +12,8 @@ export interface ScrapingConfig {
   selector: string;
   selectorType: "css" | "xpath" | "auto";
   categories: string[];
+  customEntities?: CustomEntity[]; // Custom entity definitions for advanced categorization
+  prebuiltSelectors?: PrebuiltSelector[]; // Prebuilt selectors for common use cases
   options: {
     handleDynamicContent: boolean;
     followPagination: boolean;
@@ -29,6 +31,11 @@ export interface ScrapingConfig {
     headers?: Record<string, string>; // Custom headers
     timeout?: number; // Custom timeout in milliseconds
     retryDelay?: number; // Delay between retries in milliseconds
+    useAI?: boolean; // Use AI for enhanced extraction
+    aiConfidenceThreshold?: number; // Minimum confidence threshold for AI extraction (0-1)
+    extractMetadata?: boolean; // Extract metadata like author, date, etc.
+    followLinks?: boolean; // Follow links to extract more data
+    maxLinkDepth?: number; // Maximum depth for link following
   };
   outputFormat: "json" | "html" | "text" | "structured";
   schedule?: {
@@ -73,6 +80,25 @@ export interface ScrapingConfig {
   };
 }
 
+export interface CustomEntity {
+  name: string; // Entity name (e.g., "product_name", "service_title")
+  category: string; // Category this entity belongs to
+  possibleValues?: string[]; // Possible values for this entity
+  selector?: string; // CSS or XPath selector for this entity
+  regex?: string; // Regular expression to extract this entity
+  required?: boolean; // Whether this entity is required
+  description?: string; // Description of this entity
+}
+
+export interface PrebuiltSelector {
+  name: string; // Name of the selector (e.g., "Product Grid", "Service List")
+  description: string; // Description of what this selector targets
+  selector: string; // The actual CSS or XPath selector
+  selectorType: "css" | "xpath"; // Type of selector
+  category: string; // Category this selector is for
+  website?: string; // Website this selector is optimized for (optional)
+}
+
 export interface CategoryItem {
   id: string;
   title: string;
@@ -96,12 +122,13 @@ export interface ScrapingResult {
   configId: string;
   url: string;
   timestamp: string;
-  status: "success" | "partial" | "failed";
+  status: "success" | "partial" | "failed" | "warning";
   categories: Record<string, CategoryData>;
   raw?: {
     json?: string;
     html?: string;
     text?: string;
+    structured?: any;
   };
   metadata?: {
     processingTime?: number;
@@ -109,7 +136,9 @@ export interface ScrapingResult {
     elementCount?: number;
     errors?: string[];
     warnings?: string[];
+    suggestions?: string[];
     version?: string;
+    [key: string]: any; // Allow for additional metadata
   };
   createdAt: string;
   updatedAt: string;
@@ -119,4 +148,11 @@ export interface ScrapingError {
   message: string;
   code: string;
   details?: any;
+}
+
+export interface ExportOptions {
+  format: "json" | "csv" | "excel" | "pdf" | "markdown" | "html" | "text";
+  includeMetadata?: boolean;
+  fileName?: string;
+  categories?: string[];
 }
