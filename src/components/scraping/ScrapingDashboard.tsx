@@ -15,7 +15,7 @@ import {
   FileJson,
   FileText,
   FileSpreadsheet,
-  FilePdf,
+  File,
 } from "lucide-react";
 import { Alert, AlertDescription } from "../ui/alert";
 import {
@@ -683,7 +683,7 @@ const ScrapingDashboard: React.FC<ScrapingDashboardProps> = ({
                     onClick={() => handleExportRaw("text", "pdf")}
                     className="flex items-center gap-2"
                   >
-                    <FilePdf className="h-4 w-4" /> Export as PDF
+                    <File className="h-4 w-4" /> Export as PDF
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

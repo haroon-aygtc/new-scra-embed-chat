@@ -13,7 +13,7 @@ import {
   FileJson,
   FileText,
   FileSpreadsheet,
-  FilePdf,
+  File,
   FileCode,
 } from "lucide-react";
 import {
@@ -130,7 +130,7 @@ const ScrapingResultsPanel: React.FC<ScrapingResultsPanelProps> = ({
       case "excel":
         return <FileSpreadsheet className="h-4 w-4 mr-2" />;
       case "pdf":
-        return <FilePdf className="h-4 w-4 mr-2" />;
+        return <File className="h-4 w-4 mr-2" />;
       case "markdown":
         return <FileCode className="h-4 w-4 mr-2" />;
       default:
