@@ -87,15 +87,225 @@ const DataPreview = ({
 }: DataPreviewProps) => {
   const [activeTab, setActiveTab] = useState("json");
   const [exportFormat, setExportFormat] = useState("json");
+  const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
     const contentToCopy = data[activeTab as keyof typeof data] || "";
     navigator.clipboard.writeText(contentToCopy.toString());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
     onCopy(activeTab);
   };
 
   const handleExport = () => {
     onExport(activeTab, exportFormat);
+  };
+
+  const downloadData = () => {
+    try {
+      const content = data[activeTab as keyof typeof data] || "";
+      let exportContent: string;
+      let mimeType: string;
+      let fileExtension: string;
+
+      // Process content based on export format
+      switch (exportFormat) {
+        case "json":
+          exportContent =
+            typeof content === "string"
+              ? content
+              : JSON.stringify(content, null, 2);
+          mimeType = "application/json";
+          fileExtension = "json";
+          break;
+        case "csv":
+          // Convert to CSV if possible
+          if (typeof content === "string" && content.startsWith("{")) {
+            try {
+              const jsonData = JSON.parse(content);
+              exportContent = convertToCSV(jsonData);
+            } catch (e) {
+              exportContent = content;
+            }
+          } else {
+            exportContent =
+              typeof content === "string" ? content : convertToCSV(content);
+          }
+          mimeType = "text/csv";
+          fileExtension = "csv";
+          break;
+        case "excel":
+          // For Excel, we'll use CSV as a simple approximation
+          if (typeof content === "string" && content.startsWith("{")) {
+            try {
+              const jsonData = JSON.parse(content);
+              exportContent = convertToCSV(jsonData);
+            } catch (e) {
+              exportContent = content;
+            }
+          } else {
+            exportContent =
+              typeof content === "string" ? content : convertToCSV(content);
+          }
+          mimeType = "text/csv";
+          fileExtension = "csv";
+          break;
+        case "pdf":
+          // PDF generation would require a library, using text for now
+          exportContent =
+            typeof content === "string"
+              ? content
+              : JSON.stringify(content, null, 2);
+          mimeType = "text/plain";
+          fileExtension = "txt";
+          break;
+        case "markdown":
+          if (typeof content === "string" && content.startsWith("{")) {
+            try {
+              const jsonData = JSON.parse(content);
+              exportContent = convertToMarkdown(jsonData, activeTab);
+            } catch (e) {
+              exportContent = content;
+            }
+          } else {
+            exportContent =
+              typeof content === "string"
+                ? content
+                : convertToMarkdown(content, activeTab);
+          }
+          mimeType = "text/markdown";
+          fileExtension = "md";
+          break;
+        default:
+          exportContent =
+            typeof content === "string"
+              ? content
+              : JSON.stringify(content, null, 2);
+          mimeType = "text/plain";
+          fileExtension = "txt";
+      }
+
+      // Create and download the file
+      const blob = new Blob([exportContent], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `data-${activeTab}-${new Date().toISOString().split("T")[0]}.${fileExtension}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Also call the provided export handler
+      onExport(activeTab, exportFormat);
+    } catch (error) {
+      console.error(`Error exporting ${activeTab} as ${exportFormat}:`, error);
+    }
+  };
+
+  // Helper function to convert JSON to CSV
+  const convertToCSV = (jsonData: any): string => {
+    if (typeof jsonData === "string") {
+      try {
+        jsonData = JSON.parse(jsonData);
+      } catch (e) {
+        return jsonData; // Return as-is if not valid JSON
+      }
+    }
+
+    // Handle different data structures
+    if (Array.isArray(jsonData)) {
+      // Array of objects
+      if (jsonData.length === 0) return "";
+
+      const headers = Object.keys(jsonData[0]);
+      const csvRows = [
+        headers.join(","), // Header row
+        ...jsonData.map((row) => {
+          return headers
+            .map((header) => {
+              const cell = row[header];
+              // Handle nested objects and arrays
+              const cellStr =
+                typeof cell === "object" ? JSON.stringify(cell) : String(cell);
+              // Escape quotes and wrap in quotes if needed
+              return `"${cellStr.replace(/"/g, '""')}"`;
+            })
+            .join(",");
+        }),
+      ];
+      return csvRows.join("\n");
+    } else if (typeof jsonData === "object" && jsonData !== null) {
+      // Single object
+      const headers = Object.keys(jsonData);
+      const csvRows = [
+        headers.join(","),
+        headers
+          .map((header) => {
+            const cell = jsonData[header];
+            const cellStr =
+              typeof cell === "object" ? JSON.stringify(cell) : String(cell);
+            return `"${cellStr.replace(/"/g, '""')}"`;
+          })
+          .join(","),
+      ];
+      return csvRows.join("\n");
+    }
+
+    // Fallback for other types
+    return String(jsonData);
+  };
+
+  // Helper function to convert JSON to Markdown
+  const convertToMarkdown = (jsonData: any, dataType: string): string => {
+    if (typeof jsonData === "string") {
+      try {
+        jsonData = JSON.parse(jsonData);
+      } catch (e) {
+        return jsonData; // Return as-is if not valid JSON
+      }
+    }
+
+    let markdown = `# ${dataType.toUpperCase()} Data\n\n`;
+
+    if (Array.isArray(jsonData)) {
+      // Array of objects
+      if (jsonData.length === 0) return markdown + "No data available.";
+
+      const headers = Object.keys(jsonData[0]);
+
+      // Create table header
+      markdown += `| ${headers.join(" | ")} |\n`;
+      markdown += `| ${headers.map(() => "---").join(" | ")} |\n`;
+
+      // Create table rows
+      jsonData.forEach((row) => {
+        const rowValues = headers.map((header) => {
+          const cell = row[header];
+          const cellStr =
+            typeof cell === "object" ? JSON.stringify(cell) : String(cell);
+          return cellStr.replace(/\|/g, "\\|"); // Escape pipe characters
+        });
+        markdown += `| ${rowValues.join(" | ")} |\n`;
+      });
+    } else if (typeof jsonData === "object" && jsonData !== null) {
+      // Single object or nested structure
+      markdown += "## Properties\n\n";
+
+      Object.entries(jsonData).forEach(([key, value]) => {
+        const valueStr =
+          typeof value === "object"
+            ? JSON.stringify(value, null, 2)
+            : String(value);
+        markdown += `### ${key}\n\n`;
+        markdown += "```\n" + valueStr + "\n```\n\n";
+      });
+    } else {
+      // Simple value
+      markdown += "```\n" + String(jsonData) + "\n```\n";
+    }
+
+    return markdown;
   };
 
   const renderCodeBlock = (content: string, language: string) => {
@@ -156,7 +366,7 @@ const DataPreview = ({
                   className="flex items-center gap-1"
                 >
                   <Copy className="h-4 w-4" />
-                  <span>Copy</span>
+                  <span>{copied ? "Copied!" : "Copy"}</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -185,7 +395,7 @@ const DataPreview = ({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={handleExport}
+                    onClick={downloadData}
                     className="flex items-center gap-1"
                   >
                     <Download className="h-4 w-4" />

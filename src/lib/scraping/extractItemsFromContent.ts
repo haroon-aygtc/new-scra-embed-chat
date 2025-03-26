@@ -735,3 +735,112 @@ function calculateConfidence(item: any, keywords: string[]): number {
 
   return Math.min(0.95, score); // Cap at 0.95 as we can't be 100% confident
 }
+
+/**
+ * Helper function to convert JSON to CSV
+ */
+export function convertToCSV(jsonData: any): string {
+  if (typeof jsonData === "string") {
+    try {
+      jsonData = JSON.parse(jsonData);
+    } catch (e) {
+      return jsonData; // Return as-is if not valid JSON
+    }
+  }
+
+  // Handle different data structures
+  if (Array.isArray(jsonData)) {
+    // Array of objects
+    if (jsonData.length === 0) return "";
+
+    const headers = Object.keys(jsonData[0]);
+    const csvRows = [
+      headers.join(","), // Header row
+      ...jsonData.map((row) => {
+        return headers
+          .map((header) => {
+            const cell = row[header];
+            // Handle nested objects and arrays
+            const cellStr =
+              typeof cell === "object" ? JSON.stringify(cell) : String(cell);
+            // Escape quotes and wrap in quotes if needed
+            return `"${cellStr.replace(/"/g, '""')}"`;
+          })
+          .join(",");
+      }),
+    ];
+    return csvRows.join("\n");
+  } else if (typeof jsonData === "object" && jsonData !== null) {
+    // Single object
+    const headers = Object.keys(jsonData);
+    const csvRows = [
+      headers.join(","),
+      headers
+        .map((header) => {
+          const cell = jsonData[header];
+          const cellStr =
+            typeof cell === "object" ? JSON.stringify(cell) : String(cell);
+          return `"${cellStr.replace(/"/g, '""')}"`;
+        })
+        .join(","),
+    ];
+    return csvRows.join("\n");
+  }
+
+  // Fallback for other types
+  return String(jsonData);
+}
+
+/**
+ * Helper function to convert JSON to Markdown
+ */
+export function convertToMarkdown(jsonData: any, dataType: string): string {
+  if (typeof jsonData === "string") {
+    try {
+      jsonData = JSON.parse(jsonData);
+    } catch (e) {
+      return jsonData; // Return as-is if not valid JSON
+    }
+  }
+
+  let markdown = `# ${dataType.toUpperCase()} Data\n\n`;
+
+  if (Array.isArray(jsonData)) {
+    // Array of objects
+    if (jsonData.length === 0) return markdown + "No data available.";
+
+    const headers = Object.keys(jsonData[0]);
+
+    // Create table header
+    markdown += `| ${headers.join(" | ")} |\n`;
+    markdown += `| ${headers.map(() => "---").join(" | ")} |\n`;
+
+    // Create table rows
+    jsonData.forEach((row) => {
+      const rowValues = headers.map((header) => {
+        const cell = row[header];
+        const cellStr =
+          typeof cell === "object" ? JSON.stringify(cell) : String(cell);
+        return cellStr.replace(/\|/g, "\\|"); // Escape pipe characters
+      });
+      markdown += `| ${rowValues.join(" | ")} |\n`;
+    });
+  } else if (typeof jsonData === "object" && jsonData !== null) {
+    // Single object or nested structure
+    markdown += "## Properties\n\n";
+
+    Object.entries(jsonData).forEach(([key, value]) => {
+      const valueStr =
+        typeof value === "object"
+          ? JSON.stringify(value, null, 2)
+          : String(value);
+      markdown += `### ${key}\n\n`;
+      markdown += "```\n" + valueStr + "\n```\n\n";
+    });
+  } else {
+    // Simple value
+    markdown += "```\n" + String(jsonData) + "\n```\n";
+  }
+
+  return markdown;
+}

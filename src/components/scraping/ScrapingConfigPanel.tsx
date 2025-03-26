@@ -717,6 +717,7 @@ const ScrapingConfigPanel: React.FC<ScrapingConfigPanelProps> = ({
                     url={config.url}
                     onSave={handleVisualSelectorSave}
                     onClose={() => setShowVisualBuilder(false)}
+                    initialCategories={config.categories}
                   />
                 </div>
               </DialogContent>
