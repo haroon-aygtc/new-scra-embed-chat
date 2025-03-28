@@ -1124,78 +1124,634 @@ function removeImagesAndMedia(structured: any): any {
   return result;
 }
 
-function autoDetectStructure(html: string, text: string, categories: string[]) {
+/**
+ * Auto-detects structure in HTML content using AI-powered analysis
+ * Uses external AI services to categorize and structure content
+ */
+async function autoDetectStructure(
+  html: string,
+  text: string,
+  categories: string[],
+) {
   try {
-    // In a production environment, this would use NLP and ML techniques
-    // For this implementation, we'll create a simple simulation
-
+    // Initialize the structured data object
     const structured: Record<string, any> = {};
 
-    // Simulate detecting services
-    if (categories.includes("Services")) {
-      structured.services = {
-        items: [
-          { title: "Service 1", description: "Description of service 1" },
-          { title: "Service 2", description: "Description of service 2" },
-        ],
-      };
+    // Skip processing if text is too short
+    if (!text || text.length < 50) {
+      console.warn("Text content too short for AI analysis");
+      return structured;
     }
 
-    // Simulate detecting fees
-    if (categories.includes("Fees")) {
-      structured.fees = {
-        items: [
-          {
-            title: "Fee 1",
-            amount: "$100",
-            description: "Description of fee 1",
+    // Prepare the API request payload with more comprehensive options
+    const payload = {
+      content: text.substring(0, 15000), // Increased limit for better context
+      html: html.substring(0, 20000), // Increased limit for better context
+      categories: categories,
+      options: {
+        extractMetadata: true,
+        confidenceThreshold: 0.7, // Increased confidence threshold for better accuracy
+        maxItemsPerCategory: 15, // Increased max items for more comprehensive results
+        extractRelationships: true, // Extract relationships between items
+        deduplicateResults: true, // Deduplicate results
+        enhancedCategorization: true, // Use enhanced categorization algorithms
+        version: "2.0", // API version
+      },
+    };
+
+    // Define the API endpoint for AI content analysis
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "/api";
+    const AI_ANALYSIS_ENDPOINT = `${API_BASE_URL}/scraping/analyze`;
+
+    // Call the AI service with improved timeout and retry handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout (increased)
+
+    // Implement retry logic with exponential backoff
+    const maxRetries = 3;
+    let retryCount = 0;
+    let lastError: Error | null = null;
+
+    while (retryCount < maxRetries) {
+      try {
+        // Add retry delay with exponential backoff (except for first attempt)
+        if (retryCount > 0) {
+          const backoffDelay = Math.min(
+            1000 * Math.pow(2, retryCount - 1),
+            8000,
+          );
+          await new Promise((resolve) => setTimeout(resolve, backoffDelay));
+          console.log(
+            `Retrying AI analysis (attempt ${retryCount + 1}/${maxRetries})`,
+          );
+        }
+
+        const response = await fetch(AI_ANALYSIS_ENDPOINT, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Retry-Count": retryCount.toString(), // Add retry count header for monitoring
           },
-          {
-            title: "Fee 2",
-            amount: "$200",
-            description: "Description of fee 2",
-          },
-        ],
-      };
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+          // Add cache control to prevent caching of analysis requests
+          cache: "no-store",
+        });
+
+        // Handle different response status codes appropriately
+        if (response.status === 429) {
+          // Rate limiting
+          const retryAfter = response.headers.get("Retry-After");
+          const retryDelay = retryAfter
+            ? parseInt(retryAfter, 10) * 1000
+            : 2000;
+          await new Promise((resolve) => setTimeout(resolve, retryDelay));
+          retryCount++;
+          continue;
+        }
+
+        if (!response.ok) {
+          // For 5xx errors, retry; for 4xx errors, fail immediately (except 429)
+          if (response.status >= 500) {
+            throw new Error(
+              `AI analysis server error: ${response.status} ${response.statusText}`,
+            );
+          } else {
+            // Client errors should not be retried
+            throw new Error(
+              `AI analysis client error: ${response.status} ${response.statusText}`,
+            );
+          }
+        }
+
+        const aiResult = await response.json();
+
+        // Process the AI results with enhanced validation
+        if (
+          aiResult &&
+          aiResult.categories &&
+          typeof aiResult.categories === "object"
+        ) {
+          // Map the AI results to our structured format with validation
+          for (const [category, data] of Object.entries(aiResult.categories)) {
+            if (data && typeof data === "object") {
+              structured[category.toLowerCase()] = data;
+            }
+          }
+
+          // Add metadata from AI analysis if available with validation
+          if (aiResult.metadata && typeof aiResult.metadata === "object") {
+            structured.metadata = {
+              ...aiResult.metadata,
+              aiProcessed: true,
+              processingTimestamp: new Date().toISOString(),
+            };
+          }
+
+          // Add analysis quality metrics if available
+          if (aiResult.quality) {
+            structured.quality = aiResult.quality;
+          }
+
+          // Clear timeout since we got a successful response
+          clearTimeout(timeoutId);
+
+          // If we have results, return them
+          if (Object.keys(structured).length > 0) {
+            return structured;
+          }
+        }
+
+        // If AI service returned empty or invalid results, log and continue to fallback
+        console.warn(
+          "AI service returned empty or invalid results, falling back to pattern matching",
+        );
+        break;
+      } catch (fetchError: any) {
+        lastError = fetchError;
+
+        // Don't retry if it was a timeout or abort error
+        if (
+          fetchError.name === "AbortError" ||
+          fetchError.name === "TimeoutError"
+        ) {
+          console.error("AI analysis timeout:", fetchError);
+          break;
+        }
+
+        // Don't retry if it was a client error (except for rate limiting which is handled above)
+        if (fetchError.message && fetchError.message.includes("client error")) {
+          console.error("AI analysis client error:", fetchError);
+          break;
+        }
+
+        // For other errors, retry
+        retryCount++;
+
+        // If we've exhausted all retries, break out of the loop
+        if (retryCount >= maxRetries) {
+          console.error(
+            `AI analysis failed after ${maxRetries} retries:`,
+            fetchError,
+          );
+          break;
+        }
+      }
     }
 
-    // Simulate detecting documents
-    if (categories.includes("Documents")) {
-      structured.documents = {
-        items: [
-          {
-            title: "Document 1",
-            type: "PDF",
-            description: "Description of document 1",
-          },
-          {
-            title: "Document 2",
-            type: "DOCX",
-            description: "Description of document 2",
-          },
-        ],
-      };
+    // Always clear the timeout to prevent memory leaks
+    clearTimeout(timeoutId);
+
+    // Log the fallback reason
+    if (lastError) {
+      console.warn(
+        `Falling back to pattern extraction due to error: ${lastError.message}`,
+      );
     }
 
-    // Simulate detecting eligibility
-    if (categories.includes("Eligibility")) {
-      structured.eligibility = {
-        items: [
-          {
-            title: "Eligibility 1",
-            description: "Description of eligibility 1",
-          },
-          {
-            title: "Eligibility 2",
-            description: "Description of eligibility 2",
-          },
-        ],
-      };
+    // Fall back to pattern-based extraction if AI service fails or returns no results
+    return fallbackPatternExtraction(html, text, categories);
+  } catch (error) {
+    console.error("Error auto-detecting structure:", error);
+    // Return an empty object with error information for debugging
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Unknown error during structure detection",
+      timestamp: new Date().toISOString(),
+    };
+  }
+}
+
+/**
+ * Fallback pattern-based extraction when AI service is unavailable
+ * Enhanced with more robust pattern matching and error handling
+ */
+function fallbackPatternExtraction(
+  html: string,
+  text: string,
+  categories: string[],
+) {
+  try {
+    const structured: Record<string, any> = {};
+    const startTime = Date.now();
+    const processedCategories: string[] = [];
+    const warnings: string[] = [];
+
+    // Add metadata to indicate this is fallback extraction
+    structured.metadata = {
+      source: "fallback_pattern_extraction",
+      timestamp: new Date().toISOString(),
+      categories: categories,
+      confidence: 0.6, // Lower confidence for pattern-based extraction
+    };
+
+    // Process each requested category with enhanced error handling
+    for (const category of categories) {
+      try {
+        const normalizedCategory =
+          category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
+
+        switch (normalizedCategory) {
+          case "Services":
+            const serviceItems = extractServiceItems(html, text);
+            structured.services = {
+              items:
+                serviceItems.length > 0
+                  ? serviceItems
+                  : [
+                      {
+                        title: "Service Analysis",
+                        description:
+                          "No services automatically detected. Please check the content manually.",
+                        confidence: 0.5,
+                      },
+                    ],
+              description: "Services offered",
+              extractionMethod: "pattern_matching",
+              itemCount: serviceItems.length,
+            };
+            processedCategories.push("Services");
+            break;
+
+          case "Fees":
+            const feeItems = extractFeeItems(html, text);
+            structured.fees = {
+              items:
+                feeItems.length > 0
+                  ? feeItems
+                  : [
+                      {
+                        title: "Fee Analysis",
+                        amount: "Varies",
+                        description:
+                          "No fee information automatically detected. Please check the content manually.",
+                        confidence: 0.5,
+                      },
+                    ],
+              description: "Fees and pricing information",
+              extractionMethod: "pattern_matching",
+              itemCount: feeItems.length,
+            };
+            processedCategories.push("Fees");
+            break;
+
+          case "Documents":
+            const documentItems = extractDocumentItems(html);
+            structured.documents = {
+              items:
+                documentItems.length > 0
+                  ? documentItems
+                  : [
+                      {
+                        title: "Document Analysis",
+                        type: "Info",
+                        description:
+                          "No documents automatically detected. Please check the content manually.",
+                        confidence: 0.5,
+                      },
+                    ],
+              description: "Available documents and forms",
+              extractionMethod: "pattern_matching",
+              itemCount: documentItems.length,
+            };
+            processedCategories.push("Documents");
+            break;
+
+          case "Eligibility":
+            const eligibilityItems = extractEligibilityItems(text);
+            structured.eligibility = {
+              items:
+                eligibilityItems.length > 0
+                  ? eligibilityItems
+                  : [
+                      {
+                        title: "Eligibility Analysis",
+                        description:
+                          "No eligibility criteria automatically detected. Please check the content manually.",
+                        confidence: 0.5,
+                      },
+                    ],
+              description: "Eligibility requirements and criteria",
+              extractionMethod: "pattern_matching",
+              itemCount: eligibilityItems.length,
+            };
+            processedCategories.push("Eligibility");
+            break;
+
+          default:
+            // Handle unknown categories with generic text analysis
+            const genericItems = extractGenericItems(text, normalizedCategory);
+            const categoryKey = normalizedCategory.toLowerCase();
+            structured[categoryKey] = {
+              items:
+                genericItems.length > 0
+                  ? genericItems
+                  : [
+                      {
+                        title: `${normalizedCategory} Analysis`,
+                        description: `No ${normalizedCategory.toLowerCase()} information automatically detected. Please check the content manually.`,
+                        confidence: 0.4,
+                      },
+                    ],
+              description: `${normalizedCategory} information`,
+              extractionMethod: "generic_pattern_matching",
+              itemCount: genericItems.length,
+            };
+            processedCategories.push(normalizedCategory);
+            warnings.push(
+              `Used generic extraction for category: ${normalizedCategory}`,
+            );
+            break;
+        }
+      } catch (categoryError) {
+        console.error(`Error processing category ${category}:`, categoryError);
+        warnings.push(
+          `Failed to process category ${category}: ${categoryError instanceof Error ? categoryError.message : "Unknown error"}`,
+        );
+
+        // Add empty placeholder for failed category
+        const categoryKey = category.toLowerCase();
+        structured[categoryKey] = {
+          items: [
+            {
+              title: `${category} Analysis Error`,
+              description: `Error occurred while analyzing ${category.toLowerCase()} content.`,
+              error:
+                categoryError instanceof Error
+                  ? categoryError.message
+                  : "Unknown error",
+              confidence: 0.1,
+            },
+          ],
+          description: `${category} extraction error`,
+          extractionMethod: "error_fallback",
+          itemCount: 0,
+          error: true,
+        };
+      }
     }
+
+    // Update metadata with processing information
+    structured.metadata = {
+      ...structured.metadata,
+      processedCategories,
+      processingTime: Date.now() - startTime,
+      warnings: warnings.length > 0 ? warnings : undefined,
+    };
 
     return structured;
   } catch (error) {
-    console.error("Error auto-detecting structure:", error);
-    return {};
+    console.error("Critical error in fallback pattern extraction:", error);
+    // Return minimal structured data with error information
+    return {
+      metadata: {
+        source: "fallback_pattern_extraction",
+        timestamp: new Date().toISOString(),
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unknown error in pattern extraction",
+        categories: categories,
+      },
+      error: {
+        items: [
+          {
+            title: "Extraction Error",
+            description: "Failed to extract content using pattern matching.",
+            error: error instanceof Error ? error.message : "Unknown error",
+            confidence: 0.1,
+          },
+        ],
+        description: "Error during content extraction",
+        extractionMethod: "error_fallback",
+        itemCount: 0,
+        error: true,
+      },
+    };
   }
+}
+
+/**
+ * Extract generic items for categories not specifically handled
+ */
+function extractGenericItems(text: string, category: string) {
+  const items = [];
+  const categoryLower = category.toLowerCase();
+  const sentences = text.split(/[.!?]\s+/);
+
+  // Look for sentences containing the category name or related terms
+  for (const sentence of sentences) {
+    if (sentence.toLowerCase().includes(categoryLower)) {
+      items.push({
+        title: sentence.substring(0, 50) + (sentence.length > 50 ? "..." : ""),
+        description: sentence.trim(),
+        confidence: 0.5,
+        category: category,
+      });
+
+      // Limit to 5 items
+      if (items.length >= 5) break;
+    }
+  }
+
+  return items;
+}
+
+/**
+ * Extract service items using pattern matching
+ */
+function extractServiceItems(html: string, text: string) {
+  const items = [];
+
+  // Look for service-like sections in the HTML
+  const serviceRegex =
+    /<h\d[^>]*>([^<]+(?:service|offering|solution)[^<]*)<\/h\d>|<div[^>]*class="[^"]*service[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
+  let match;
+
+  while ((match = serviceRegex.exec(html)) !== null) {
+    const title = match[1] || "Service";
+    const content = match[2] || "";
+    const description = content
+      ? extractTextFromHtml(content).substring(0, 200)
+      : "";
+
+    items.push({
+      title: title.trim(),
+      description: description.trim() || "No description available",
+    });
+  }
+
+  // If no services found via HTML structure, try text-based extraction
+  if (items.length === 0) {
+    // Look for sentences that might describe services
+    const sentences = text.split(/[.!?]\s+/);
+    for (const sentence of sentences) {
+      if (
+        /\b(offer|provide|service|solution)s?\b/i.test(sentence) &&
+        sentence.length > 30
+      ) {
+        items.push({
+          title:
+            sentence.substring(0, 50).trim() +
+            (sentence.length > 50 ? "..." : ""),
+          description: sentence.trim(),
+        });
+
+        // Limit to 5 items when using this fallback approach
+        if (items.length >= 5) break;
+      }
+    }
+  }
+
+  return items;
+}
+
+/**
+ * Extract fee items using pattern matching
+ */
+function extractFeeItems(html: string, text: string) {
+  const items = [];
+
+  // Look for price/fee patterns in the text
+  const priceRegex = /\$\s?\d+(?:\.\d{2})?|\d+(?:\.\d{2})\s?(?:USD|dollars)/g;
+  const prices = text.match(priceRegex) || [];
+
+  // Look for fee tables in the HTML
+  const tableRegex = /<table[^>]*>[\s\S]*?<\/table>/gi;
+  let tableMatch;
+
+  while ((tableMatch = tableRegex.exec(html)) !== null) {
+    const tableHtml = tableMatch[0];
+    if (/price|cost|fee|payment/i.test(tableHtml)) {
+      // Extract rows from the table
+      const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+      let rowMatch;
+
+      while ((rowMatch = rowRegex.exec(tableHtml)) !== null) {
+        const rowContent = rowMatch[1];
+        const cellRegex = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+        const cells = [];
+        let cellMatch;
+
+        while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
+          cells.push(extractTextFromHtml(cellMatch[1]).trim());
+        }
+
+        if (cells.length >= 2) {
+          // Assume first cell is description and look for price in other cells
+          const title = cells[0];
+          let amount = "";
+
+          // Find the cell that looks most like a price
+          for (let i = 1; i < cells.length; i++) {
+            if (/\$\s?\d+|\d+\s?(?:USD|dollars)/i.test(cells[i])) {
+              amount = cells[i];
+              break;
+            }
+          }
+
+          if (title && amount) {
+            items.push({
+              title,
+              amount,
+              description: `${title}: ${amount}`,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // If no structured fees found, use the extracted prices
+  if (items.length === 0 && prices.length > 0) {
+    // Look for sentences containing prices
+    const sentences = text.split(/[.!?]\s+/);
+    for (const price of prices) {
+      for (const sentence of sentences) {
+        if (sentence.includes(price)) {
+          items.push({
+            title: `Fee: ${price}`,
+            amount: price,
+            description: sentence.trim(),
+          });
+          break;
+        }
+      }
+
+      // Limit to 5 items when using this fallback approach
+      if (items.length >= 5) break;
+    }
+  }
+
+  return items;
+}
+
+/**
+ * Extract document items using pattern matching
+ */
+function extractDocumentItems(html: string) {
+  const items = [];
+
+  // Look for links to documents
+  const linkRegex =
+    /<a[^>]*href=["']([^"']+\.(?:pdf|doc|docx|xls|xlsx|ppt|pptx|txt))["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let match;
+
+  while ((match = linkRegex.exec(html)) !== null) {
+    const url = match[1];
+    const linkText = extractTextFromHtml(match[2]).trim();
+    const extension = url.split(".").pop()?.toLowerCase() || "";
+
+    items.push({
+      title: linkText || `Document (${extension.toUpperCase()})`,
+      type: extension.toUpperCase(),
+      url: url,
+      description: `${linkText || "Document"} (${extension.toUpperCase()} format)`,
+    });
+  }
+
+  return items;
+}
+
+/**
+ * Extract eligibility items using pattern matching
+ */
+function extractEligibilityItems(text: string) {
+  const items = [];
+
+  // Look for eligibility-related sentences
+  const eligibilityKeywords = [
+    "eligible",
+    "eligibility",
+    "qualify",
+    "qualification",
+    "requirement",
+    "criteria",
+    "must be",
+    "must have",
+    "you need",
+    "applicants must",
+    "to be eligible",
+  ];
+
+  const sentences = text.split(/[.!?]\s+/);
+
+  for (const sentence of sentences) {
+    for (const keyword of eligibilityKeywords) {
+      if (sentence.toLowerCase().includes(keyword)) {
+        items.push({
+          title: `Eligibility: ${keyword}`,
+          description: sentence.trim(),
+        });
+        break;
+      }
+    }
+
+    // Limit to 5 items
+    if (items.length >= 5) break;
+  }
+
+  return items;
 }

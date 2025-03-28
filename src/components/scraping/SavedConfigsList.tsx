@@ -12,10 +12,22 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, Save, Trash2, Clock, Calendar, Edit } from "lucide-react";
+import {
+  Search,
+  Save,
+  Trash2,
+  Clock,
+  Calendar,
+  Edit,
+  RefreshCw,
+} from "lucide-react";
 import { ScrapingConfig } from "@/types/scraping";
-import { loadScrapingConfigurations } from "@/lib/api/scraping";
+import {
+  loadScrapingConfigurations,
+  deleteScrapingConfiguration,
+} from "@/lib/api/scraping";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface SavedConfigsListProps {
   onLoadConfig: (config: ScrapingConfig) => void;
@@ -39,99 +51,29 @@ const SavedConfigsList: React.FC<SavedConfigsListProps> = ({
     try {
       setIsLoading(true);
       setError(null);
-      const loadedConfigs = await loadScrapingConfigurations();
+      const loadedConfigs = await loadScrapingConfigurations(50, 0); // Load up to 50 configs
       setConfigs(loadedConfigs);
     } catch (error: any) {
       console.error("Error loading configurations:", error);
       setError(error.message || "Failed to load configurations");
-      // Set some sample data for demonstration
-      setConfigs([
-        {
-          id: "config_1",
-          name: "Basic Website Scraper",
-          url: "https://example.com",
-          mode: "single",
-          scrapingMode: "basic",
-          selector: ".content",
-          selectorType: "css",
-          categories: ["Services", "Fees"],
-          options: {
-            handleDynamicContent: true,
-            followPagination: false,
-            extractImages: true,
-            deduplicateResults: true,
-            maxPages: 5,
-            skipHeadersFooters: false,
-            skipImagesMedia: false,
-            stealthMode: true,
-            respectRobotsTxt: true,
-            rateLimitDelay: 1000,
-          },
-          outputFormat: "json",
-          createdAt: new Date(Date.now() - 86400000).toISOString(),
-          updatedAt: new Date(Date.now() - 86400000).toISOString(),
-        },
-        {
-          id: "config_2",
-          name: "Daily News Scraper",
-          url: "https://news-example.com",
-          mode: "scheduled",
-          scrapingMode: "thorough",
-          selector: "article",
-          selectorType: "css",
-          categories: ["News", "Articles"],
-          options: {
-            handleDynamicContent: true,
-            followPagination: true,
-            extractImages: true,
-            deduplicateResults: true,
-            maxPages: 10,
-            skipHeadersFooters: true,
-            skipImagesMedia: false,
-            stealthMode: true,
-            respectRobotsTxt: true,
-            rateLimitDelay: 2000,
-          },
-          outputFormat: "structured",
-          schedule: {
-            frequency: "daily",
-            time: "08:00",
-            enabled: true,
-          },
-          createdAt: new Date(Date.now() - 172800000).toISOString(),
-          updatedAt: new Date(Date.now() - 86400000).toISOString(),
-        },
-        {
-          id: "config_3",
-          name: "Multiple E-commerce Sites",
-          url: "https://shop1-example.com",
-          urls: [
-            "https://shop1-example.com",
-            "https://shop2-example.com",
-            "https://shop3-example.com",
-          ],
-          mode: "multiple",
-          scrapingMode: "semantic",
-          selector: ".product",
-          selectorType: "auto",
-          categories: ["Products", "Prices", "Reviews"],
-          options: {
-            handleDynamicContent: true,
-            followPagination: false,
-            extractImages: true,
-            deduplicateResults: true,
-            maxPages: 3,
-            skipHeadersFooters: false,
-            skipImagesMedia: false,
-            stealthMode: true,
-            respectRobotsTxt: true,
-            rateLimitDelay: 3000,
-          },
-          outputFormat: "json",
-          createdAt: new Date(Date.now() - 259200000).toISOString(),
-          updatedAt: new Date(Date.now() - 172800000).toISOString(),
-        },
-      ]);
+      // Don't set sample data in production - just show the error
+      setConfigs([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteConfig = async (configId: string) => {
+    try {
+      setIsLoading(true);
+      await deleteScrapingConfiguration(configId);
+      // Remove from local state
+      setConfigs(configs.filter((config) => config.id !== configId));
+      // Call the parent's onDeleteConfig if provided
+      onDeleteConfig(configId);
+    } catch (error: any) {
+      console.error("Error deleting configuration:", error);
+      setError(error.message || "Failed to delete configuration");
     } finally {
       setIsLoading(false);
     }
@@ -139,6 +81,10 @@ const SavedConfigsList: React.FC<SavedConfigsListProps> = ({
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
+  };
+
+  const handleRefresh = () => {
+    loadConfigurations();
   };
 
   const filteredConfigs = configs.filter((config) => {
@@ -152,8 +98,13 @@ const SavedConfigsList: React.FC<SavedConfigsListProps> = ({
   });
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString() + " " + date.toLocaleTimeString();
+    if (!dateString) return "";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString() + " " + date.toLocaleTimeString();
+    } catch (e) {
+      return "Invalid date";
+    }
   };
 
   const getModeBadgeColor = (mode: string) => {
@@ -173,17 +124,36 @@ const SavedConfigsList: React.FC<SavedConfigsListProps> = ({
     <div className="w-full h-full flex flex-col bg-background border rounded-lg shadow-sm">
       <div className="flex items-center justify-between p-4 border-b">
         <h3 className="text-lg font-medium">Saved Configurations</h3>
-        <div className="relative">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="text"
-            placeholder="Search configurations..."
-            className="pl-8 w-[250px]"
-            value={searchTerm}
-            onChange={handleSearch}
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search configurations..."
+              className="pl-8 w-[250px]"
+              value={searchTerm}
+              onChange={handleSearch}
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleRefresh}
+            disabled={isLoading}
+            title="Refresh configurations"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+            />
+          </Button>
         </div>
       </div>
+
+      {error && (
+        <Alert variant="destructive" className="m-4">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       <ScrollArea className="flex-grow p-4">
         {isLoading ? (
@@ -276,7 +246,8 @@ const SavedConfigsList: React.FC<SavedConfigsListProps> = ({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => onDeleteConfig(config.id || "")}
+                    onClick={() => handleDeleteConfig(config.id || "")}
+                    disabled={isLoading}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

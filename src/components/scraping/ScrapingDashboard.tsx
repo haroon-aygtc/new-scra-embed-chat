@@ -59,6 +59,7 @@ const ScrapingDashboard: React.FC<ScrapingDashboardProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(initialLoading);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [analyticsData, setAnalyticsData] = useState(null);
 
   // Load initial results if available
   useEffect(() => {
@@ -67,6 +68,7 @@ const ScrapingDashboard: React.FC<ScrapingDashboardProps> = ({
 
     const fetchInitialResults = async () => {
       try {
+        setIsLoading(true);
         const results = await getScrapingResults();
         if (isMounted && results && results.length > 0) {
           // Get the most recent result
@@ -74,9 +76,14 @@ const ScrapingDashboard: React.FC<ScrapingDashboardProps> = ({
           setScrapingResults(latestResult);
           setLastUpdated(new Date(latestResult.updatedAt).toLocaleString());
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching initial results:", error);
-        // Don't set error state here to avoid showing error on initial load
+        // Set error state with a user-friendly message
+        setError("Unable to load initial results. Please try again later.");
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
@@ -590,6 +597,14 @@ const ScrapingDashboard: React.FC<ScrapingDashboardProps> = ({
 
     return markdown;
   };
+
+  // Fetch analytics data when the analytics tab is selected
+  useEffect(() => {
+    if (activeTab === "analytics" && !analyticsData) {
+      // This would be implemented to fetch analytics data from the API
+      // For now, we'll let the ScrapingAnalytics component handle its own data fetching
+    }
+  }, [activeTab, analyticsData]);
 
   return (
     <div className="w-full h-full bg-background p-4 rounded-lg shadow-sm border">

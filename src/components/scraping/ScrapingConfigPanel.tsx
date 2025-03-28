@@ -159,7 +159,7 @@ const ScrapingConfigPanel: React.FC<ScrapingConfigPanelProps> = ({
 
   const handleOptionChange = (
     option: keyof ScrapingConfig["options"],
-    value: boolean | number,
+    value: boolean | number | string,
   ) => {
     setConfig({
       ...config,
@@ -685,7 +685,31 @@ const ScrapingConfigPanel: React.FC<ScrapingConfigPanelProps> = ({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowVisualBuilder(true)}
+                onClick={() => {
+                  // Validate URL more strictly before opening visual builder
+                  if (!isValidUrl(config.url)) {
+                    setError(
+                      "Please enter a valid URL including http:// or https://",
+                    );
+                    return;
+                  }
+
+                  // Check if URL is likely to have CORS issues
+                  const url = new URL(config.url);
+                  const hostname = url.hostname;
+                  const potentialCorsIssue =
+                    !hostname.includes("localhost") &&
+                    !hostname.includes("127.0.0.1") &&
+                    !hostname.includes("example.com");
+
+                  if (potentialCorsIssue && !config.options.proxyUrl) {
+                    setSavedMessage(
+                      "Opening Visual Builder. Note: Some websites may block iframe access due to security policies. If you encounter CORS errors, try using a CORS proxy in Advanced Options.",
+                    );
+                  }
+
+                  setShowVisualBuilder(true);
+                }}
                 disabled={!isValidUrl(config.url)}
                 title={!isValidUrl(config.url) ? "Enter a valid URL first" : ""}
               >
@@ -715,6 +739,7 @@ const ScrapingConfigPanel: React.FC<ScrapingConfigPanelProps> = ({
                 <div className="flex-1 overflow-hidden">
                   <VisualSelectorBuilder
                     url={config.url}
+                    proxyUrl={config.options.proxyUrl}
                     onSave={handleVisualSelectorSave}
                     onClose={() => setShowVisualBuilder(false)}
                     initialCategories={config.categories}
@@ -871,6 +896,57 @@ const ScrapingConfigPanel: React.FC<ScrapingConfigPanelProps> = ({
               <p className="text-xs text-muted-foreground">
                 Delay between requests to avoid rate limiting (0-10000ms)
               </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center">
+                <label className="text-sm font-medium">CORS Proxy URL</label>
+                <HelpTooltip content="Use a CORS proxy to bypass cross-origin restrictions. Format: https://your-proxy-url/?url=" />
+              </div>
+              <Input
+                placeholder="https://corsproxy.io/?url="
+                value={config.options.proxyUrl || ""}
+                onChange={(e) => handleOptionChange("proxyUrl", e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                If you're seeing CORS errors, use a proxy like corsproxy.io,
+                corsanywhere.herokuapp.com, or your own proxy
+              </p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                <Badge
+                  variant="outline"
+                  className="cursor-pointer hover:bg-accent"
+                  onClick={() =>
+                    handleOptionChange("proxyUrl", "https://corsproxy.io/?url=")
+                  }
+                >
+                  corsproxy.io
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className="cursor-pointer hover:bg-accent"
+                  onClick={() =>
+                    handleOptionChange(
+                      "proxyUrl",
+                      "https://api.allorigins.win/raw?url=",
+                    )
+                  }
+                >
+                  allorigins.win
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className="cursor-pointer hover:bg-accent"
+                  onClick={() =>
+                    handleOptionChange(
+                      "proxyUrl",
+                      "https://cors-anywhere.herokuapp.com/",
+                    )
+                  }
+                >
+                  cors-anywhere
+                </Badge>
+              </div>
             </div>
           </div>
         </TabsContent>

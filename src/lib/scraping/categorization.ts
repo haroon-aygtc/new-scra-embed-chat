@@ -20,9 +20,12 @@ export async function categorizeContent(
     for (const category of categories) {
       const categoryKey = category.toLowerCase();
 
+      // Get category description - now async
+      const description = await getCategoryDescription(category);
+
       // Initialize category data
       categorizedData[categoryKey] = {
-        description: getCategoryDescription(category),
+        description,
         items: [],
         metadata: {
           processingTime: 0,
@@ -218,8 +221,46 @@ function addCrossCategoryRelationships(
 
 /**
  * Returns a description for a category
+ * Fetches from API if available, falls back to local defaults
  */
-function getCategoryDescription(category: string): string {
+async function getCategoryDescription(category: string): Promise<string> {
+  const key = category.toLowerCase();
+
+  try {
+    // Try to fetch category description from API
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+    // Check if we're in a browser environment
+    const baseUrl =
+      typeof window !== "undefined"
+        ? window.location.origin
+        : "http://localhost:3000";
+    const response = await fetch(
+      `${baseUrl}${API_BASE_URL}/api/scraping/categories/${key}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        // Add cache control to avoid excessive API calls
+        cache: "force-cache",
+      },
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.description) {
+        return data.description;
+      }
+    }
+
+    // Fall back to default descriptions if API fails
+    console.info(`Using default description for category: ${key}`);
+  } catch (error) {
+    console.warn(`Error fetching category description for ${key}:`, error);
+    // Continue to fallback - don't throw error to ensure graceful degradation
+  }
+
+  // Default descriptions as fallback
   const descriptions: Record<string, string> = {
     services: "Services offered by the organization",
     fees: "Pricing and fee structure",
@@ -234,7 +275,6 @@ function getCategoryDescription(category: string): string {
     testimonials: "Customer reviews and testimonials",
   };
 
-  const key = category.toLowerCase();
   return descriptions[key] || `Information about ${category}`;
 }
 

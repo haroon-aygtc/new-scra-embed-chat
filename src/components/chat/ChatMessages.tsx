@@ -36,35 +36,8 @@ interface ChatMessagesProps {
 }
 
 const ChatMessages = ({
-  messages = [
-    {
-      id: "1",
-      content: "Hello! How can I help you today?",
-      sender: "ai",
-      timestamp: new Date(),
-      category: "greeting",
-    },
-    {
-      id: "2",
-      content: "I need information about your services.",
-      sender: "user",
-      timestamp: new Date(Date.now() - 60000),
-    },
-    {
-      id: "3",
-      content:
-        "I can provide information about our advanced categorized scraping services. We offer data extraction, categorization, and structured output for websites. Would you like to know more about specific features?",
-      sender: "ai",
-      timestamp: new Date(Date.now() - 30000),
-      category: "services",
-      source: [
-        {
-          url: "https://example.com/services",
-          title: "Our Services",
-        },
-      ],
-    },
-  ],
+  messages = [],
+
   isTyping = false,
   onFeedback = () => {},
   className = "",

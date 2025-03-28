@@ -38,6 +38,7 @@ import { Input as InputWithButton } from "@/components/ui/input";
 
 interface VisualSelectorBuilderProps {
   url: string;
+  proxyUrl?: string;
   onSave?: (selectors: any) => void;
   onClose?: () => void;
   initialCategories?: string[];
@@ -54,6 +55,7 @@ interface ElementData {
 
 const VisualSelectorBuilder: React.FC<VisualSelectorBuilderProps> = ({
   url,
+  proxyUrl,
   onSave = () => {},
   onClose = () => {},
   initialCategories = ["Services", "Fees", "Documents", "Eligibility"],
@@ -90,6 +92,24 @@ const VisualSelectorBuilder: React.FC<VisualSelectorBuilderProps> = ({
       setIsLoading(false);
 
       try {
+        // Check if we can access the iframe content
+        if (!iframe.contentWindow) {
+          throw new Error("Cannot access iframe content window");
+        }
+
+        // Check if the iframe has loaded a cross-origin URL
+        try {
+          // This will throw an error if it's cross-origin
+          const testAccess = iframe.contentWindow.location.href;
+          console.log("Successfully accessed iframe content:", testAccess);
+        } catch (corsError) {
+          console.error("Cross-origin restriction detected:", corsError);
+          setError(
+            "Cannot access the website due to cross-origin restrictions. Try using a CORS proxy in the Advanced Options tab (e.g., https://corsproxy.io/?url=).",
+          );
+          return;
+        }
+
         // Initialize the selector tool in the iframe
         const script = document.createElement("script");
         script.textContent = `
@@ -652,12 +672,19 @@ const VisualSelectorBuilder: React.FC<VisualSelectorBuilderProps> = ({
             <iframe
               ref={iframeRef}
               id="selector-iframe"
-              src={url}
+              src={proxyUrl ? `${proxyUrl}${encodeURIComponent(url)}` : url}
               className="w-full h-full border-0"
               title="Website Preview"
-              sandbox="allow-same-origin allow-scripts allow-forms"
+              sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
               referrerPolicy="no-referrer"
               onLoad={() => setIsLoading(false)}
+              onError={(e) => {
+                console.error("Iframe loading error:", e);
+                setError(
+                  "Failed to load URL in iframe. Try a different URL or check browser console for details.",
+                );
+                setIsLoading(false);
+              }}
             ></iframe>
             {selectionMode && hoveredElement && (
               <div className="absolute bottom-4 left-4 right-4 bg-background border rounded-md p-2 shadow-lg">

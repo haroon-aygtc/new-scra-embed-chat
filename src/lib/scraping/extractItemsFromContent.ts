@@ -544,9 +544,9 @@ function extractEligibilityItems(
 }
 
 /**
- * Extract product items from content
+ * Extract product items from content with dynamic description extraction
  */
-function extractProductItems(
+async function extractProductItems(
   content: string,
   keywords: string[],
   items: any[],
@@ -563,27 +563,86 @@ function extractProductItems(
     // Get the content after the heading
     const afterHeading = content.substring(
       position + match[0].length,
-      position + match[0].length + 500,
+      position + match[0].length + 1000, // Increased context window for better extraction
     );
-    const descriptionMatch = /<p[^>]*>([^<]+)<\/p>/i.exec(afterHeading);
 
-    // Look for price in the description
+    // Extract description using multiple patterns for better coverage
+    let description = "";
+    const descriptionPatterns = [
+      /<p[^>]*>([^<]+)<\/p>/i,
+      /<div[^>]*class=["'][^"']*(?:description|content|text)[^"']*["'][^>]*>([^<]+)<\/div>/i,
+      /<span[^>]*class=["'][^"']*(?:description|content|text)[^"']*["'][^>]*>([^<]+)<\/span>/i,
+    ];
+
+    // Try each pattern until we find a match
+    for (const pattern of descriptionPatterns) {
+      const descriptionMatch = pattern.exec(afterHeading);
+      if (descriptionMatch && descriptionMatch[1]) {
+        description = descriptionMatch[1].trim();
+        break;
+      }
+    }
+
+    // If no description found, try to extract from multiple paragraphs
+    if (!description) {
+      const paragraphs = [];
+      const paragraphPattern = /<p[^>]*>([^<]+)<\/p>/gi;
+      let paragraphMatch;
+      while (
+        (paragraphMatch = paragraphPattern.exec(afterHeading)) !== null &&
+        paragraphs.length < 3
+      ) {
+        paragraphs.push(paragraphMatch[1].trim());
+      }
+      if (paragraphs.length > 0) {
+        description = paragraphs.join(" ");
+      }
+    }
+
+    // Look for price in the description and surrounding content
     let price = null;
-    if (descriptionMatch) {
-      const priceMatch = descriptionMatch[1].match(/\$\s*\d+(?:\.\d{2})?/i);
+    const pricePatterns = [
+      /\$\s*\d+(?:\.\d{2})?/i,
+      /(?:price|cost|fee)\s*:\s*\$?\s*\d+(?:\.\d{2})?/i,
+      /\d+(?:\.\d{2})?\s*(?:dollars|USD)/i,
+    ];
+
+    for (const pattern of pricePatterns) {
+      const priceMatch = afterHeading.match(pattern);
       if (priceMatch) {
         price = priceMatch[0];
+        break;
       }
+    }
+
+    // Try to extract additional metadata
+    const metadata: Record<string, any> = {};
+
+    // Extract availability
+    const availabilityMatch = afterHeading.match(
+      /(?:availability|status|stock)\s*:\s*([\w\s-]+)/i,
+    );
+    if (availabilityMatch) {
+      metadata.availability = availabilityMatch[1].trim();
+    }
+
+    // Extract SKU/ID
+    const skuMatch = afterHeading.match(
+      /(?:sku|id|item[\s-]?(?:number|#|code))\s*:\s*([\w\d-]+)/i,
+    );
+    if (skuMatch) {
+      metadata.sku = skuMatch[1].trim();
     }
 
     items.push({
       title,
-      content: descriptionMatch ? descriptionMatch[1].trim() : "",
+      content: description || "",
       price,
       matchedKeywords: keywords.filter((keyword) =>
         title.toLowerCase().includes(keyword.toLowerCase()),
       ),
       position,
+      metadata,
     });
   }
 
@@ -595,27 +654,74 @@ function extractProductItems(
     const productHtml = match[0];
     const position = match.index;
 
-    // Extract title
-    const titleMatch =
-      /<h\d[^>]*>([^<]+)<\/h\d>|<div[^>]*class=["'][^"']*title[^"']*["'][^>]*>([^<]+)<\/div>/i.exec(
-        productHtml,
-      );
-    const title = titleMatch
-      ? (titleMatch[1] || titleMatch[2]).trim()
-      : "Product";
+    // Extract title with expanded patterns
+    const titlePatterns = [
+      /<h\d[^>]*>([^<]+)<\/h\d>/i,
+      /<div[^>]*class=["'][^"']*(?:title|name|heading)[^"']*["'][^>]*>([^<]+)<\/div>/i,
+      /<span[^>]*class=["'][^"']*(?:title|name|heading)[^"']*["'][^>]*>([^<]+)<\/span>/i,
+      /<a[^>]*>([^<]+)<\/a>/i,
+    ];
 
-    // Extract price
-    const priceMatch = productHtml.match(/\$\s*\d+(?:\.\d{2})?/i);
-    const price = priceMatch ? priceMatch[0] : null;
+    let title = "Product";
+    for (const pattern of titlePatterns) {
+      const titleMatch = pattern.exec(productHtml);
+      if (titleMatch && titleMatch[1]) {
+        title = titleMatch[1].trim();
+        break;
+      }
+    }
 
-    // Extract description
-    const descriptionMatch =
-      /<p[^>]*>([^<]+)<\/p>|<div[^>]*class=["'][^"']*description[^"']*["'][^>]*>([^<]+)<\/div>/i.exec(
-        productHtml,
-      );
-    const description = descriptionMatch
-      ? (descriptionMatch[1] || descriptionMatch[2]).trim()
-      : "";
+    // Extract price with expanded patterns
+    let price = null;
+    const pricePatterns = [
+      /\$\s*\d+(?:\.\d{2})?/i,
+      /(?:price|cost|fee)\s*:\s*\$?\s*\d+(?:\.\d{2})?/i,
+      /<span[^>]*class=["'][^"']*(?:price|cost)[^"']*["'][^>]*>([^<]+)<\/span>/i,
+    ];
+
+    for (const pattern of pricePatterns) {
+      const priceMatch = productHtml.match(pattern);
+      if (priceMatch) {
+        price = priceMatch[0].replace(/<[^>]+>/g, "").trim();
+        if (price.match(/price|cost|fee/i)) {
+          price = price.replace(/.*?([\$\d\.]+).*/, "$1");
+        }
+        break;
+      }
+    }
+
+    // Extract description with expanded patterns
+    const descriptionPatterns = [
+      /<p[^>]*>([^<]+)<\/p>/i,
+      /<div[^>]*class=["'][^"']*(?:description|content|text)[^"']*["'][^>]*>([^<]+)<\/div>/i,
+      /<span[^>]*class=["'][^"']*(?:description|content|text)[^"']*["'][^>]*>([^<]+)<\/span>/i,
+    ];
+
+    let description = "";
+    for (const pattern of descriptionPatterns) {
+      const descriptionMatch = pattern.exec(productHtml);
+      if (descriptionMatch && descriptionMatch[1]) {
+        description = descriptionMatch[1].trim();
+        break;
+      }
+    }
+
+    // Extract additional metadata
+    const metadata: Record<string, any> = {};
+
+    // Extract availability
+    const availabilityPattern =
+      /<[^>]*class=["'][^"']*(?:availability|stock)[^"']*["'][^>]*>([^<]+)<\/[^>]*>/i;
+    const availabilityMatch = availabilityPattern.exec(productHtml);
+    if (availabilityMatch) {
+      metadata.availability = availabilityMatch[1].trim();
+    }
+
+    // Extract image URL if present
+    const imageMatch = /<img[^>]*src=["']([^"']+)["'][^>]*>/i.exec(productHtml);
+    if (imageMatch) {
+      metadata.imageUrl = imageMatch[1];
+    }
 
     items.push({
       title,
@@ -623,6 +729,7 @@ function extractProductItems(
       price,
       matchedKeywords: ["product"],
       position,
+      metadata,
     });
   }
 }

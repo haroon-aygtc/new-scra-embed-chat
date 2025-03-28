@@ -25,7 +25,7 @@ export interface ScrapingConfig {
     stealthMode: boolean;
     respectRobotsTxt: boolean;
     rateLimitDelay: number; // in milliseconds
-    proxyUrl?: string; // Optional proxy URL for bypassing restrictions
+    proxyUrl?: string; // Optional proxy URL for bypassing CORS restrictions
     userAgent?: string; // Custom user agent
     cookies?: Record<string, string>; // Cookies to send with request
     headers?: Record<string, string>; // Custom headers

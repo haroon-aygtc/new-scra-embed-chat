@@ -50,3 +50,7 @@ node_modules/
 .git
 
 .github/
+
+# Data directory - keep the directory but ignore contents
+/data/*
+!/data/.gitkeep
