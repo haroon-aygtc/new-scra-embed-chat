@@ -55,7 +55,7 @@ interface ElementData {
 
 const VisualSelectorBuilder: React.FC<VisualSelectorBuilderProps> = ({
   url,
-  proxyUrl,
+  proxyUrl = "https://corsproxy.io/?url=",
   onSave = () => {},
   onClose = () => {},
   initialCategories = ["Services", "Fees", "Documents", "Eligibility"],
@@ -86,6 +86,11 @@ const VisualSelectorBuilder: React.FC<VisualSelectorBuilderProps> = ({
   useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe) return;
+
+    // Set default URL if none provided
+    if (!url || url.trim() === "") {
+      url = "https://example.com";
+    }
 
     const handleIframeLoad = () => {
       setIframeLoaded(true);
@@ -669,23 +674,106 @@ const VisualSelectorBuilder: React.FC<VisualSelectorBuilderProps> = ({
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
             )}
-            <iframe
-              ref={iframeRef}
-              id="selector-iframe"
-              src={proxyUrl ? `${proxyUrl}${encodeURIComponent(url)}` : url}
-              className="w-full h-full border-0"
-              title="Website Preview"
-              sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
-              referrerPolicy="no-referrer"
-              onLoad={() => setIsLoading(false)}
-              onError={(e) => {
-                console.error("Iframe loading error:", e);
-                setError(
-                  "Failed to load URL in iframe. Try a different URL or check browser console for details.",
-                );
-                setIsLoading(false);
-              }}
-            ></iframe>
+            {error ? (
+              <div className="flex flex-col items-center justify-center h-full bg-muted/20 p-8 text-center">
+                <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+                <h3 className="text-lg font-medium mb-2">
+                  Error Loading Website
+                </h3>
+                <p className="text-sm text-muted-foreground mb-6">{error}</p>
+                <div className="space-y-4 w-full max-w-md">
+                  <div className="flex items-center space-x-2">
+                    <Input
+                      value={url || ""}
+                      onChange={(e) => (url = e.target.value)}
+                      placeholder="Enter website URL"
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setError(null);
+                        setIsLoading(true);
+                        if (iframe) {
+                          iframe.src = proxyUrl
+                            ? `${proxyUrl}${encodeURIComponent(url)}`
+                            : `https://corsproxy.io/?${encodeURIComponent(url)}`;
+                        }
+                      }}
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Retry
+                    </Button>
+                  </div>
+                  <div className="bg-muted p-4 rounded-md">
+                    <h4 className="text-sm font-medium mb-2">
+                      Try these demo URLs:
+                    </h4>
+                    <ul className="space-y-2 text-sm">
+                      <li>
+                        <Button
+                          variant="link"
+                          className="p-0 h-auto text-primary"
+                          onClick={() => {
+                            url = "https://example.com";
+                            setError(null);
+                            setIsLoading(true);
+                            if (iframe) {
+                              iframe.src = proxyUrl
+                                ? `${proxyUrl}${encodeURIComponent(url)}`
+                                : `https://corsproxy.io/?${encodeURIComponent(url)}`;
+                            }
+                          }}
+                        >
+                          https://example.com
+                        </Button>
+                      </li>
+                      <li>
+                        <Button
+                          variant="link"
+                          className="p-0 h-auto text-primary"
+                          onClick={() => {
+                            url =
+                              "https://demo.scraping-bot.io/scraper/data-extraction-tool";
+                            setError(null);
+                            setIsLoading(true);
+                            if (iframe) {
+                              iframe.src = proxyUrl
+                                ? `${proxyUrl}${encodeURIComponent(url)}`
+                                : `https://corsproxy.io/?${encodeURIComponent(url)}`;
+                            }
+                          }}
+                        >
+                          https://demo.scraping-bot.io/scraper/data-extraction-tool
+                        </Button>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <iframe
+                ref={iframeRef}
+                id="selector-iframe"
+                src={
+                  proxyUrl
+                    ? `${proxyUrl}${encodeURIComponent(url || "https://example.com")}`
+                    : `https://corsproxy.io/?${encodeURIComponent(url || "https://example.com")}`
+                }
+                className="w-full h-full border-0"
+                title="Website Preview"
+                sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+                referrerPolicy="no-referrer"
+                onLoad={() => setIsLoading(false)}
+                onError={(e) => {
+                  console.error("Iframe loading error:", e);
+                  setError(
+                    "Failed to load URL in iframe. Try using a different URL or one of our demo URLs below.",
+                  );
+                  setIsLoading(false);
+                }}
+              ></iframe>
+            )}
             {selectionMode && hoveredElement && (
               <div className="absolute bottom-4 left-4 right-4 bg-background border rounded-md p-2 shadow-lg">
                 <div className="text-sm font-medium">

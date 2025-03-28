@@ -232,6 +232,8 @@ export async function saveScrapingResult(
 
 /**
  * Get all scraping results from storage
+ * This function will try to get results from the database first,
+ * and if that fails, it will fall back to file storage.
  * @param limit Optional limit for pagination
  * @param offset Optional offset for pagination
  * @returns Array of scraping results

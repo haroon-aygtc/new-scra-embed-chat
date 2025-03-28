@@ -8,6 +8,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -17,13 +18,15 @@ import {
   Github,
   Layers,
   MessageSquare,
+  Database,
+  BarChart4,
+  Settings,
 } from "lucide-react";
-import ScrapingDashboard from "@/components/scraping/ScrapingDashboard";
 import ChatWidget from "@/components/chat/ChatWidget";
 import Link from "next/link";
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = useState("features");
   const [showChatWidget, setShowChatWidget] = useState(true);
   const [windowDimensions, setWindowDimensions] = useState({
     width: 0,
@@ -79,9 +82,11 @@ export default function Home() {
                 </p>
               </div>
               <div className="flex flex-col gap-2 min-[400px]:flex-row">
-                <Button onClick={() => setActiveTab("dashboard")} size="lg">
-                  Try Scraping Dashboard
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                <Button asChild size="lg">
+                  <Link href="/scraping">
+                    Access Scraping Dashboard
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
                 </Button>
                 <Button
                   onClick={() => setShowChatWidget(!showChatWidget)}
@@ -120,9 +125,9 @@ export default function Home() {
       <section className="container px-4 md:px-6 py-6 flex-1">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 mb-6">
-            <TabsTrigger value="dashboard">
+            <TabsTrigger value="features">
               <Layers className="mr-2 h-4 w-4" />
-              Scraping Dashboard
+              Features
             </TabsTrigger>
             <TabsTrigger value="documentation">
               <Code className="mr-2 h-4 w-4" />
@@ -138,9 +143,82 @@ export default function Home() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="dashboard" className="space-y-4">
-            <div className="h-[800px] rounded-lg overflow-hidden border">
-              <ScrapingDashboard />
+          <TabsContent value="features" className="space-y-4">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <Card className="flex flex-col">
+                <CardHeader>
+                  <Database className="h-8 w-8 mb-2 text-primary" />
+                  <CardTitle>Advanced Web Scraping</CardTitle>
+                  <CardDescription>
+                    Extract data from any website with precision
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex-grow">
+                  <p className="text-sm text-muted-foreground">
+                    Configure custom selectors, handle dynamic content, and
+                    extract structured data from single or multiple pages with
+                    our powerful scraping engine.
+                  </p>
+                </CardContent>
+                <CardFooter>
+                  <Button variant="outline" className="w-full" asChild>
+                    <Link href="/scraping">
+                      Open Scraping Dashboard
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                </CardFooter>
+              </Card>
+
+              <Card className="flex flex-col">
+                <CardHeader>
+                  <Settings className="h-8 w-8 mb-2 text-primary" />
+                  <CardTitle>Intelligent Categorization</CardTitle>
+                  <CardDescription>
+                    Automatically organize extracted content
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex-grow">
+                  <p className="text-sm text-muted-foreground">
+                    Our AI-powered system automatically categorizes content into
+                    meaningful groups like services, pricing, documents, and
+                    more using advanced NLP.
+                  </p>
+                </CardContent>
+                <CardFooter>
+                  <Button variant="outline" className="w-full" asChild>
+                    <Link href="/scraping?tab=results">
+                      View Categorization
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                </CardFooter>
+              </Card>
+
+              <Card className="flex flex-col">
+                <CardHeader>
+                  <BarChart4 className="h-8 w-8 mb-2 text-primary" />
+                  <CardTitle>Comprehensive Analytics</CardTitle>
+                  <CardDescription>
+                    Gain insights from your scraped data
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex-grow">
+                  <p className="text-sm text-muted-foreground">
+                    Track scraping performance, monitor success rates, and
+                    visualize data patterns with our built-in analytics
+                    dashboard.
+                  </p>
+                </CardContent>
+                <CardFooter>
+                  <Button variant="outline" className="w-full" asChild>
+                    <Link href="/scraping?tab=analytics">
+                      Explore Analytics
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                </CardFooter>
+              </Card>
             </div>
           </TabsContent>
 
@@ -344,7 +422,8 @@ export default function Home() {
         <div className="container px-4 md:px-6">
           <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
             <p className="text-center text-sm text-muted-foreground md:text-left">
-              © 2023 Advanced Categorized Scraping Module. All rights reserved.
+              © {new Date().getFullYear()} Advanced Categorized Scraping
+              Module. All rights reserved.
             </p>
             <div className="flex gap-4">
               <Link

@@ -52,20 +52,32 @@ try {
     connectionLimit: dbConfig.connectionLimit,
   });
 
-  pool = mysql.createPool(dbConfig);
-
-  // Add event listeners to monitor connection issues
-  pool.on("connection", () => {
-    console.log("New connection established to MySQL");
-    isDbAvailable = true;
-  });
-
-  pool.on("error", (err) => {
-    console.error("MySQL pool error:", err);
+  // Check if required environment variables are set
+  if (
+    !process.env.MYSQL_HOST ||
+    !process.env.MYSQL_USER ||
+    !process.env.MYSQL_DATABASE
+  ) {
+    console.log(
+      "MySQL environment variables not set, using file storage fallback",
+    );
     isDbAvailable = false;
-  });
+  } else {
+    pool = mysql.createPool(dbConfig);
 
-  console.log("MySQL connection pool created successfully");
+    // Add event listeners to monitor connection issues
+    pool.on("connection", () => {
+      console.log("New connection established to MySQL");
+      isDbAvailable = true;
+    });
+
+    pool.on("error", (err) => {
+      console.error("MySQL pool error:", err);
+      isDbAvailable = false;
+    });
+
+    console.log("MySQL connection pool created successfully");
+  }
 } catch (error) {
   console.error("Error creating MySQL connection pool:", error);
   // We already have a dummy pool initialized above
@@ -219,6 +231,19 @@ export async function testDatabaseConnection() {
       return false;
     }
 
+    // Check if required environment variables are set
+    if (
+      !process.env.MYSQL_HOST ||
+      !process.env.MYSQL_USER ||
+      !process.env.MYSQL_DATABASE
+    ) {
+      console.log(
+        "MySQL environment variables not set, using file storage fallback",
+      );
+      isDbAvailable = false;
+      return false;
+    }
+
     // Try a simple query to test the connection with a timeout
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error("Database connection timeout")), 5000);
@@ -252,17 +277,25 @@ export async function testDatabaseConnection() {
 // to allow the server to fully start up first
 setTimeout(() => {
   console.log("Starting delayed database initialization...");
-  initializeDatabase()
-    .then((success) => {
-      if (success) {
-        console.log("Database initialization completed successfully");
-      } else {
-        console.log(
-          "Database initialization failed, using file storage fallback",
-        );
-      }
-    })
-    .catch((error) => {
-      console.error("Unhandled error during database initialization:", error);
-    });
+  try {
+    initializeDatabase()
+      .then((success) => {
+        if (success) {
+          console.log("Database initialization completed successfully");
+          isDbAvailable = true;
+        } else {
+          console.log(
+            "Database initialization failed, using file storage fallback",
+          );
+          isDbAvailable = false;
+        }
+      })
+      .catch((error) => {
+        console.error("Unhandled error during database initialization:", error);
+        isDbAvailable = false;
+      });
+  } catch (error) {
+    console.error("Unexpected error during database initialization:", error);
+    isDbAvailable = false;
+  }
 }, 2000); // 2 second delay

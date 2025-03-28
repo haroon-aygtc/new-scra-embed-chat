@@ -1,13 +1,8 @@
-/**
- * File storage module for scraping configurations and results
- * Handles reading and writing data to JSON files
- */
-
 import fs from "fs-extra";
 import path from "path";
 import { ScrapingConfig, ScrapingResult } from "@/types/scraping";
 
-// Define storage directories
+// Define paths for file storage
 const DATA_DIR = path.join(process.cwd(), "data");
 const CONFIGS_DIR = path.join(DATA_DIR, "configurations");
 const RESULTS_DIR = path.join(DATA_DIR, "results");
@@ -22,52 +17,67 @@ export async function initializeFileStorage() {
     await fs.ensureDir(CONFIGS_DIR);
     await fs.ensureDir(RESULTS_DIR);
     console.log("File storage initialized successfully");
+    return true;
   } catch (error) {
     console.error("Error initializing file storage:", error);
-    throw error;
+    // Don't throw, just return false to indicate failure
+    return false;
   }
 }
 
 /**
- * Save a scraping configuration to a JSON file
- * @param config The configuration to save
- * @returns The saved configuration
+ * Save a scraping configuration to a file
+ * @param config Scraping configuration to save
+ * @returns The saved configuration with updated timestamps
  */
 export async function saveConfigToFile(
   config: ScrapingConfig,
 ): Promise<ScrapingConfig> {
   try {
+    // Ensure the config has an ID
+    if (!config.id) {
+      config.id = `config_${Date.now()}`;
+    }
+
+    // Set timestamps
+    const now = new Date().toISOString();
+    if (!config.createdAt) {
+      config.createdAt = now;
+    }
+    config.updatedAt = now;
+
+    // Save to file
     const filePath = path.join(CONFIGS_DIR, `${config.id}.json`);
     await fs.writeJson(filePath, config, { spaces: 2 });
     return config;
   } catch (error) {
-    console.error(`Error saving configuration ${config.id} to file:`, error);
+    console.error("Error saving configuration to file:", error);
     throw error;
   }
 }
 
 /**
- * Load a scraping configuration from a JSON file
- * @param id The ID of the configuration to load
+ * Load a scraping configuration from a file
+ * @param configId ID of the configuration to load
  * @returns The loaded configuration or null if not found
  */
 export async function loadConfigFromFile(
-  id: string,
+  configId: string,
 ): Promise<ScrapingConfig | null> {
   try {
-    const filePath = path.join(CONFIGS_DIR, `${id}.json`);
+    const filePath = path.join(CONFIGS_DIR, `${configId}.json`);
     if (await fs.pathExists(filePath)) {
       return await fs.readJson(filePath);
     }
     return null;
   } catch (error) {
-    console.error(`Error loading configuration ${id} from file:`, error);
+    console.error("Error loading configuration from file:", error);
     return null;
   }
 }
 
 /**
- * Load all scraping configurations from JSON files
+ * Load all scraping configurations from files
  * @param limit Optional limit for pagination
  * @param offset Optional offset for pagination
  * @returns Array of configurations
@@ -77,6 +87,15 @@ export async function loadAllConfigsFromFiles(
   offset = 0,
 ): Promise<ScrapingConfig[]> {
   try {
+    // Check if directory exists first
+    if (!(await fs.pathExists(CONFIGS_DIR))) {
+      console.log(
+        `Configs directory ${CONFIGS_DIR} does not exist, creating it`,
+      );
+      await fs.ensureDir(CONFIGS_DIR);
+      return [];
+    }
+
     // Get all configuration files
     const files = await fs.readdir(CONFIGS_DIR);
     const jsonFiles = files.filter((file) => file.endsWith(".json"));
@@ -107,64 +126,77 @@ export async function loadAllConfigsFromFiles(
 }
 
 /**
- * Delete a scraping configuration JSON file
- * @param id The ID of the configuration to delete
+ * Delete a scraping configuration file
+ * @param configId ID of the configuration to delete
  * @returns True if deleted successfully, false otherwise
  */
-export async function deleteConfigFile(id: string): Promise<boolean> {
+export async function deleteConfigFile(configId: string): Promise<boolean> {
   try {
-    const filePath = path.join(CONFIGS_DIR, `${id}.json`);
+    const filePath = path.join(CONFIGS_DIR, `${configId}.json`);
     if (await fs.pathExists(filePath)) {
       await fs.remove(filePath);
       return true;
     }
     return false;
   } catch (error) {
-    console.error(`Error deleting configuration ${id} file:`, error);
+    console.error(`Error deleting config file ${configId}:`, error);
     return false;
   }
 }
 
 /**
- * Save a scraping result to a JSON file
- * @param result The result to save
- * @returns The saved result
+ * Save a scraping result to a file
+ * @param result Scraping result to save
+ * @returns The saved result with updated timestamps
  */
 export async function saveResultToFile(
   result: ScrapingResult,
 ): Promise<ScrapingResult> {
   try {
+    // Ensure the result has an ID
+    if (!result.id) {
+      result.id = `result_${Date.now()}`;
+    }
+
+    // Set timestamps
+    const now = new Date().toISOString();
+    if (!result.createdAt) {
+      result.createdAt = now;
+    }
+    result.updatedAt = now;
+
+    // Save to file
     const filePath = path.join(RESULTS_DIR, `${result.id}.json`);
     await fs.writeJson(filePath, result, { spaces: 2 });
     return result;
   } catch (error) {
-    console.error(`Error saving result ${result.id} to file:`, error);
+    console.error("Error saving result to file:", error);
     throw error;
   }
 }
 
 /**
- * Load a scraping result from a JSON file
- * @param id The ID of the result to load
+ * Load a scraping result from a file
+ * @param resultId ID of the result to load
  * @returns The loaded result or null if not found
  */
 export async function loadResultFromFile(
-  id: string,
+  resultId: string,
 ): Promise<ScrapingResult | null> {
   try {
-    const filePath = path.join(RESULTS_DIR, `${id}.json`);
+    const filePath = path.join(RESULTS_DIR, `${resultId}.json`);
     if (await fs.pathExists(filePath)) {
       return await fs.readJson(filePath);
     }
     return null;
   } catch (error) {
-    console.error(`Error loading result ${id} from file:`, error);
+    console.error("Error loading result from file:", error);
     return null;
   }
 }
 
 /**
- * Load all scraping results from JSON files
+ * Load all scraping results from files
  * @param limit Optional limit for pagination
  * @param offset Optional offset for pagination
  * @returns Array of results
@@ -174,6 +206,15 @@ export async function loadAllResultsFromFiles(
   offset = 0,
 ): Promise<ScrapingResult[]> {
   try {
+    // Check if directory exists first
+    if (!(await fs.pathExists(RESULTS_DIR))) {
+      console.log(
+        `Results directory ${RESULTS_DIR} does not exist, creating it`,
+      );
+      await fs.ensureDir(RESULTS_DIR);
+      return [];
+    }
+
     // Get all result files
     const files = await fs.readdir(RESULTS_DIR);
     const jsonFiles = files.filter((file) => file.endsWith(".json"));
@@ -204,23 +245,30 @@ export async function loadAllResultsFromFiles(
 }
 
 /**
- * Delete a scraping result JSON file
- * @param id The ID of the result to delete
+ * Delete a scraping result file
+ * @param resultId ID of the result to delete
  * @returns True if deleted successfully, false otherwise
  */
-export async function deleteResultFile(id: string): Promise<boolean> {
+export async function deleteResultFile(resultId: string): Promise<boolean> {
   try {
-    const filePath = path.join(RESULTS_DIR, `${id}.json`);
+    const filePath = path.join(RESULTS_DIR, `${resultId}.json`);
     if (await fs.pathExists(filePath)) {
       await fs.remove(filePath);
       return true;
     }
     return false;
   } catch (error) {
-    console.error(`Error deleting result ${id} file:`, error);
+    console.error(`Error deleting result file ${resultId}:`, error);
     return false;
   }
 }
 
 // Initialize file storage when this module is imported
-initializeFileStorage().catch(console.error);
+// Wrap in try/catch to prevent unhandled promise rejection
+try {
+  initializeFileStorage().catch((error) => {
+    console.error("Error initializing file storage:", error);
+  });
+} catch (error) {
+  console.error("Unexpected error during file storage initialization:", error);
+}
